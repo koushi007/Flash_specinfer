@@ -1,0 +1,58 @@
+NVIDIA A6000 Specifications:
+
+Compute Capability: 8.6
+SMs: 84
+Max Grid Size: 2147483647 x 65535 x 65535
+Max Block Size: 1024 x 1024 x 64
+Max Threads per Block: 1024
+Max Threads per SM: 1536
+Max Warps per SM: 48
+Max Share Memory per SM: 100 KB
+Max Share Memory per Block: 48 KB
+Maximum grid dimensions: 2147483647 x 65535 x 65535
+Maximum block dimensions: 1024 x 1024 x 64
+
+// printf("SMs: %d\n", prop.multiProcessorCount);
+// printf("Max Grid Size: %d x %d x %d\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
+// printf("Max Block Size: %d x %d x %d\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
+// printf("Max Threads per Block: %d\n", prop.maxThreadsPerBlock);
+// printf("Max Threads per SM: %d\n", prop.maxThreadsPerMultiProcessor);
+// printf("Max Warps per SM: %d\n", prop.maxThreadsPerMultiProcessor / prop.warpSize);
+// printf("Max Share Memory per SM: %d KB\n", prop.sharedMemPerMultiprocessor / 1024);
+// printf("Max Share Memory per Block: %d KB\n", prop.sharedMemPerBlock / 1024);
+
+https://docs.nvidia.com/cuda/ampere-tuning-guide/#occupancy
+
+2 Blocks per SM
+84 * 2 = 168 Blocks in total
+768 Threads per Block
+2 FP32 SRAM per thread
+168 * 768 = 129024 Threads in total
+
+# Hyperparams from FlashAttention2
+- ??? Block size {64, 128} x {64, 128} s.t. head dim d & SRAM size
+
+# Testing sizes
+- Head Dimension - 32 / 64 - restricted by shared memory size
+- Num Heads - 32 / 16 (s.t. total head dim = 1024)
+- Sequence Length - 2^9, 2^10, ..., 2^14
+- Batch size s.t. total tokens 2^14; Ex: 2^5 if (2^9 seq length) 
+
+# Evaluation from FlashAttention2
+- Occupancy / TFLOPs per sec
+    - FLOPs = 4 * seqlen * seqlen * head_dim * num_heads
+        - Causal = divide by 2 
+        - Tree = ???
+- Mem transfer
+- Runtime
+
+VERY GOOD CONFIG
+batch_size = 4
+n_head = 1
+head_embd = 64 # 32 or 64 - restricted by shared memory size
+num_tree_nodes = 2**6 - 10
+prompt_length = 10
+
+# Ideas
+- Does using compiler to generate 'forward_gen.cu' with hardcoded values for constants help?
+    - We can write nice forms like __shared__ float s_Qi[32][128]; and use 2D arrays
